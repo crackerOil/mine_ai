@@ -1,2 +1,2 @@
 # mine_ai
-# cool thing
+cool thing
