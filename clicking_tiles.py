@@ -10,9 +10,10 @@ class GetOutput():
 			input()
 			
 		elif self.difficulty == "intermediate": # 250% zoom
-			#self.table_coords = (75, 281) # school comp
-			self.table_coords = (75, 317) # home comp
-			self.reset_coords = (398, 253)
+			self.table_coords = (75, 281) # school comp
+			#self.table_coords = (75, 317) # home comp
+			self.reset_coords = (398, 217) # school comp
+			#self.reset_coords = (398, 253)
 			
 		elif self.difficulty == "expert": # 175% zoom
 			print("Stop.")

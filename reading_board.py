@@ -29,8 +29,8 @@ class GetInput():
 			self.cols = 16
 			self.mines = 40
 			
-			#self.crop_box = (75, 281, 716, 922) # school comp
-			self.crop_box = (75, 317, 716, 958) # home comp
+			self.crop_box = (75, 281, 716, 922) # school comp
+			#self.crop_box = (75, 317, 716, 958) # home comp
 			
 			self.reset_pos = (398, 218)
 			

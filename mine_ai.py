@@ -1,192 +1,16 @@
 import numpy as np
-import win32api, win32con
-import pyscreenshot
 import time
 import operator
 import random
 import math
-import networkx as nx
-import matplotlib.pyplot as plt
+
+from global_vars import *
 
 from reading_board import GetInput
 from clicking_tiles import GetOutput
 
-open_new_plot_window = True
+from genome_ops import Gene, Genome, Neuron, global_innovs
 
-num_wins = 0
-
-input_number = 24
-output_number = 2
-
-c_param_1 = 1
-c_param_2 = 1
-c_param_3 = 0.4
-distance_threshold = 3
-
-population_size = 20
-
-global_innovs = {}
-		
-class Gene():
-	def __init__(self, in_node, out_node, weight, enabled, innov):
-		self.in_node = in_node
-		self.out_node = out_node
-		self.weight = weight
-		self.enabled = enabled
-		self.innov = innov
-		
-class Genome():
-	def __init__(self):
-		self.genotype = []
-		self.network = {}
-		self.network_layers = 0
-		self.fitness = 0
-		self.adjusted_fitness = 0
-	
-	def new_gene(self, in_node, out_node, weight, enabled):
-		if not ((in_node, out_node) in global_innovs):
-			new_innovation(in_node, out_node)
-			
-		innov = global_innovs[(in_node, out_node)]
-			
-		self.genotype.append(Gene(in_node, out_node, weight, enabled, innov))
-	
-	def print_genome(self):
-		for gene in self.genotype:
-			print("\nGene " + str(gene.innov) + ": " + str(gene.in_node) + " -> " + str(gene.out_node) + " (" + str(gene.weight) + ") " + str(gene.enabled))
-		
-class Neuron():
-	def __init__(self):
-		self.inputs = []
-		self.value = 0
-		self.layer = None
-		
-def new_network(genome):
-	network = {}
-	
-	for i in range(1, (input_number + output_number + 1)):
-		network[i] = Neuron()
-		network[i].layer = 0
-		
-	for j in range(0, len(genome.genotype)):
-		gene = genome.genotype[j]
-		
-		if gene.enabled:
-			if not (gene.out_node in network):
-				network[gene.out_node] = Neuron()
-				
-			network[gene.out_node].inputs.append(gene)
-			
-			if not (gene.in_node in network):
-				network[gene.in_node] = Neuron()
-	
-	not_checked_nodes = [node for node in range((input_number + 1), (input_number + output_number + 1))]
-	while len(not_checked_nodes) != 0:
-		active_node = not_checked_nodes[0]
-		
-		for gene in network[active_node].inputs:
-			if gene.in_node > input_number:
-				network[gene.in_node].layer = network[active_node].layer + 1
-			
-				not_checked_nodes.append(gene.in_node)
-			
-				genome.network_layers = max(genome.network_layers, network[gene.in_node].layer)
-			
-		not_checked_nodes = not_checked_nodes[1:]
-				
-	genome.network = network
-	
-def feed_network(network, inputs):
-	outputs = []
-
-	for i in range(1, (input_number + 1)):
-		network[i].value = inputs[i - 1]
-		
-	for j in list(network.keys()):
-		if j > (input_number + output_number):
-			neuron = network[j]
-	
-			sum = 0
-			for gene in neuron.inputs:
-				sum += gene.weight * network[gene.in_node].value
-			
-			sum = 1 / (1 + math.exp(-4.9 * sum)) # Modified sigmoid
-		
-			neuron.value = sum
-		
-	for k in range((input_number + 1), (input_number + output_number + 1)):
-		neuron = network[k]
-	
-		sum = 0
-		for gene in neuron.inputs:
-			sum += gene.weight * network[gene.in_node].value
-			
-		sum = 1 / (1 + math.exp(-4.9 * sum)) # Modified sigmoid
-		
-		neuron.value = sum
-		
-		outputs.append(neuron.value)
-		
-	return outputs
-
-def show_network(genome):
-	# directed graph
-	network_graph = nx.DiGraph()
-	
-	sorted_network_nodes = sorted(list(genome.network.keys()), reverse=False)
-	
-	# calculate number of nodes in each layer
-	layer_pops = {}
-	for node in sorted_network_nodes:
-		try:
-			layer_pops[genome.network[node].layer] += 1
-		except:
-			layer_pops[genome.network[node].layer] = 1
-	
-	# set up positions of each node on graph based on how many in each layer and how many layers
-	for node in sorted_network_nodes:
-		node_pos = None
-		
-		num_in_layer = 1
-		
-		if node <= input_number:
-			node_pos = (0.05, node * (1 / (input_number + 1)))
-		elif node <= (input_number + output_number):
-			node_pos = (0.95, (node - input_number) * (1 / (output_number + 1)))
-		else:
-			node_pos = (1 - (genome.network[node].layer * (0.9 / (genome.network_layers + 1)) + 0.05), num_in_layer * (1 / (layer_pops[genome.network[node].layer] + 1)))
-			
-			if num_in_layer == layer_pops[genome.network[node].layer]:
-				num_in_layer = 1
-			else:
-				num_in_layer += 1
-				
-		network_graph.add_node(node, pos=node_pos)
-	
-	# set up edges of graph
-	for edge in genome.genotype:
-		if edge.enabled:
-			network_graph.add_edge(edge.in_node, edge.out_node, weight=round(edge.weight, 2))
-
-	pos = nx.get_node_attributes(network_graph, "pos")
-	nx.draw(network_graph, pos, node_size=75, with_labels=False)
-	labels = nx.get_edge_attributes(network_graph,"weight")
-	nx.draw_networkx_edge_labels(network_graph, pos, edge_labels=labels)
-	
-	# change position and size of window and make sure it doesn't block further computation
-	#plt.draw()
-	if open_new_plot_window:
-		plt.ion()
-		fig = plt.gcf()
-		mngr = plt.get_current_fig_manager()
-		mngr.window.wm_geometry("+%d+%d" % (951, 0))
-		fig.set_size_inches(9.6, 5)
-	plt.show()
-	plt.pause(0.001)
-
-def close_network():
-	plt.clf()	
-	
 def calc_compatibility_dist(individual_1, individual_2, c1, c2, c3):
 	sorted_individual_1 = sorted(individual_1.genotype, key=lambda x: x.innov, reverse=False)
 	sorted_individual_2 = sorted(individual_2.genotype, key=lambda x: x.innov, reverse=False)
@@ -299,12 +123,9 @@ def crossover(genome_1, genome_2):
 			child.genotype.append(fitter_parent[allele])
 			
 	return child
-
-def new_innovation(input, output):
-	global_innovs[(input, output)] = len(global_innovs) + 1
 	
 def mutate_genome(genome, mutation_rate): # mutation_rate ~ 0.3 maybe?
-	new_network(genome)
+	genome.build_network()
 
 	if (random.randint(1, 100) / 100) <= mutation_rate:
 		choice = random.randint(1, 100)
@@ -446,7 +267,7 @@ def generate_initial_pop(size):
 		
 		new_genome.new_gene(in_node, out_node, random.uniform(-2, 2), True)
 		
-		new_network(new_genome)
+		new_genome.build_network()
 		
 		population.append(new_genome)
 		
@@ -454,9 +275,9 @@ def generate_initial_pop(size):
 		
 			
 def play_individual(genome):
-	new_network(genome)
+	genome.build_network()
 
-	show_network(genome)
+	genome.show_network(open_new_plot_window)
 	
 	time.sleep(3)
 	
@@ -514,7 +335,7 @@ def play_individual(genome):
 								inputs.append(empty_sum)
 								inputs.append(flag_sum)
 							
-					outputs = feed_network(genome.network, inputs)
+					outputs = genome.feed_network(inputs)
 				
 					if outputs[0] > outputs[1]:
 						if best_choice["score"] < outputs[0]:
@@ -577,7 +398,7 @@ def play_individual(genome):
 	
 	time.sleep(0.05)
 	
-	close_network()
+	genome.close_network()
 	
 def train(initial_population, c1, c2, c3, threshold, size_of_pop):
 	population = initial_population
@@ -590,7 +411,7 @@ def train(initial_population, c1, c2, c3, threshold, size_of_pop):
 						"gens_without_fitness_improvement": 0
 					   }
 				   }
-	while generation < 50:
+	while generation < 100:
 		print("\nGeneration " + str(generation))
 		
 		if generation != 0:
@@ -610,87 +431,6 @@ def train(initial_population, c1, c2, c3, threshold, size_of_pop):
 		population = selection(population, species_list, c1, c2, c3, threshold, size_of_pop, generation)
 		
 		generation += 1
-	
-	
-#genome_1 = Genome()
-#genome_1.new_gene(1, 4, 0.7, True) # 1
-#genome_1.new_gene(2, 4, -0.5, False) # 2
-#genome_1.new_gene(3, 4, 0.5, True) # 3
-#genome_1.new_gene(2, 5, 0.2, True) # 4
-#genome_1.new_gene(5, 4, 0.4, True) # 5
-#genome_1.adjusted_fitness = 100
-
-#genome_2 = Genome()
-#genome_2.new_gene(1, 4, 0.2, True) # 1
-#genome_2.new_gene(2, 4, -0.7, False) # 2
-#genome_2.new_gene(3, 4, 0.1, True) # 3
-#genome_2.new_gene(2, 5, 1.3, True) # 4
-#genome_2.new_gene(5, 6, 0.3, True) # 6
-#genome_2.new_gene(6, 4, -0.2, True) # 7
-#genome_2.new_gene(3, 5, 0.9, False) # 8
-#genome_2.new_gene(1, 6, 0.1, True) # 9
-#genome_2.adjusted_fitness = 150
-
-#genome_3 = crossover(genome_1, genome_2)
-
-#new_network(genome_1)
-
-#outputs = feed_network(genome_3.network, [1, 1, 1])
-
-#print(outputs)
-#print(genome_3.network)
-
-#genome_1.print_genome()
-
-#mutate_genome(genome_1, 1)
-
-#genome_1.print_genome()
-
-#pop[0].print_genome()
-
-#input()
-
-#play_individual(pop[0])
-
-#print(pop[0].fitness)
-
-#for creature in pop:
-#	creature.print_genome()
-
-#species_list = {1: {"individuals": [pop[0]], "max_fitness": 0, "gens_without_fitness_improvement": 0}}
-
-#speciation(pop, species_list, 1, 1, 0.4, 3)
-
-#for m in list(species_list.keys()):
-#	print("\nSpecies " + str(m) + ":")
-#	for cre in species_list[m]["individuals"]:
-#		cre.print_genome()
-
-#calc_compatibility_dist(genome_1, genome_2, 1, 1, 0.4)
-
-#new_pop = selection(pop, species_list, c_param_1, c_param_2, c_param_3, distance_threshold, population_size)
-
-#print(new_pop)
-
-#new_network(pop[0])
-
-#show_network(pop[0])
-
-#input()
-
-#close_network()
-
-#species_list = {1: {
-#						"individuals": [pop[0]], 
-#						"max_fitness": 0, 
-#						"gens_without_fitness_improvement": 0
-#					   }
-#				   }
-				   
-#pop = selection(pop, species_list, c_param_1, c_param_2, c_param_3, distance_threshold, population_size, 0)
-
-#print(pop)
-#print(species_list)
 
 pop = generate_initial_pop(population_size)
 
