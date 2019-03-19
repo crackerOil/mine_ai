@@ -10,7 +10,7 @@ c_param_2 = 1
 c_param_3 = 0.4
 distance_threshold = 3
 
-population_size = 20
+population_size = 2
 
 global_innovs = {}
 
